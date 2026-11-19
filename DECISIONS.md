@@ -45,17 +45,14 @@ CreateBookingEndpoint -> CreateBookingCommand -> CreateBookingHandler -> IRoomRe
 ## 5. What you rejected from what the AI gave you
 Give a concrete example of code or an idea proposed by the AI that you corrected or rejected, and say why.
 
-AI suggested using a generic repository, but I decided to keep separate repositories for Room and Booking.
+Codex identified a concurrency bug in the AI-generated implementation of R9. I asked the coding agent to fix it by synchronizing booking creation and cancellation with a shared SemaphoreSlim. 
 
-I rejected that idea because the course recommends repositories with only the methods we need, and a generic repository would add unnecessary complexity.
+I kept this solution because it prevents concurrent requests from bypassing the booking limits within one application instance.
 
 ## 6. If you had 30 more minutes
 What would you improve and what risk did you leave in the project?
 
 
-With 30 more minutes, I would add more integration tests for booking conflicts, cancellations and database persistence.
+With 30 more minutes, I would add more integration tests for booking conflicts, cancellations and database persistence. The current application uses a shared SemaphoreSlim to synchronize booking operations within one instance. 
 
-One risk is that two users could try to book the same room at almost the same time.
-
-Both requests might pass the availability check before either booking is saved. I would improve the concurrency handling to prevent this.
-
+However, this does not guarantee safety when multiple application instances access the same database. I would improve database-level concurrency handling to address this risk.
