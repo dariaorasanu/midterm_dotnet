@@ -8,6 +8,7 @@ namespace RoomHub.Api.Features.Bookings.CreateBooking;
 public sealed class CreateBookingHandler(
     IRoomRepository rooms,
     IBookingRepository bookings,
+    IUnitOfWork unitOfWork,
     TimeProvider timeProvider,
     BookingOperationLock operationLock)
     : ICommandHandler<CreateBookingCommand, Response>
@@ -17,39 +18,43 @@ public sealed class CreateBookingHandler(
         await operationLock.WaitAsync(ct);
         try
         {
-            var room = await rooms.GetByIdAsync(command.RoomId, ct);
-            if (room is null)
-                return Result<Response>.Failure(RoomErrors.NotFound);
+            return await unitOfWork.ExecuteInTransactionAsync(async innerCt =>
+            {
+                var room = await rooms.GetByIdAsync(command.RoomId, innerCt);
+                if (room is null)
+                    return Result<Response>.Failure(RoomErrors.NotFound);
 
-            var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
-            var existingRoomBookings = await bookings.ListForRoomAsync(room.Id, ct);
+                var nowUtc = timeProvider.GetUtcNow().UtcDateTime;
+                var existingRoomBookings = await bookings.ListForRoomAsync(room.Id, innerCt);
 
-            var normalizedStartUtc = Booking.NormalizeUtc(command.StartUtc);
-            var utcDate = DateOnly.FromDateTime(normalizedStartUtc);
-            var normalizedBookedBy = command.BookedBy?.Trim();
+                var normalizedStartUtc = Booking.NormalizeUtc(command.StartUtc);
+                var utcDate = DateOnly.FromDateTime(normalizedStartUtc);
+                var normalizedBookedBy = command.BookedBy?.Trim();
 
-            var activeBookingsOnDay = string.IsNullOrWhiteSpace(normalizedBookedBy)
-                ? 0
-                : await bookings.CountActiveByBookedByAndUtcDateAsync(normalizedBookedBy, utcDate, ct);
+                var activeBookingsOnDay = string.IsNullOrWhiteSpace(normalizedBookedBy)
+                    ? 0
+                    : await bookings.CountActiveByBookedByAndUtcDateAsync(normalizedBookedBy, utcDate, innerCt);
 
-            var bookingResult = Booking.Create(
-                room,
-                command.BookedBy,
-                command.StartUtc,
-                command.EndUtc,
-                command.Attendees,
-                nowUtc,
-                existingRoomBookings,
-                activeBookingsOnDay);
+                var bookingResult = Booking.Create(
+                    room,
+                    command.BookedBy,
+                    command.StartUtc,
+                    command.EndUtc,
+                    command.Attendees,
+                    nowUtc,
+                    existingRoomBookings,
+                    activeBookingsOnDay);
 
-            if (bookingResult.IsFailure)
-                return Result<Response>.Failure(bookingResult.Error);
+                if (bookingResult.IsFailure)
+                    return Result<Response>.Failure(bookingResult.Error);
 
-            var booking = bookingResult.Value;
-            await bookings.AddAsync(booking, ct);
+                var booking = bookingResult.Value;
+                await bookings.AddAsync(booking, innerCt);
+                await unitOfWork.SaveChangesAsync(innerCt);
 
-            return Result<Response>.Success(
-                new Response(booking.Id, booking.RoomId, booking.Status.ToString()));
+                return Result<Response>.Success(
+                    new Response(booking.Id, booking.RoomId, booking.Status.ToString()));
+            }, ct);
         }
         finally
         {
