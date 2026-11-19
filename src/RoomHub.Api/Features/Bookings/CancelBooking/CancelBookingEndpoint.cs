@@ -1,4 +1,6 @@
-using RoomHub.Api.Services;
+using RoomHub.Api.Common.Cqrs;
+using RoomHub.Api.Common.Http;
+using RoomHub.Api.Domain.Common;
 
 namespace RoomHub.Api.Features.Bookings.CancelBooking;
 
@@ -9,9 +11,15 @@ public static class CancelBookingEndpoint
         group.MapPost("/{id:guid}/cancel", Handle);
     }
 
-    private static IResult Handle(Guid id, BookingService service)
+    private static async Task<IResult> Handle(
+        Guid id,
+        ICommandHandler<CancelBookingCommand, Unit> handler,
+        CancellationToken ct)
     {
-        service.Cancel(id);
-        return Results.NoContent();
+        var result = await handler.Handle(new CancelBookingCommand(id), ct);
+
+        return result.Match(
+            _ => Results.NoContent(),
+            error => error.ToProblem());
     }
 }

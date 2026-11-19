@@ -1,26 +1,31 @@
-using RoomHub.Api.Models;
+using RoomHub.Api.Domain.Rooms;
 
 namespace RoomHub.Api.Repositories;
 
-// Starter: in-memory data. It is lost when the application restarts.
-public class RoomRepository
+public sealed class RoomRepository : IRoomRepository
 {
     private readonly List<Room> _rooms = new();
     private readonly object _lock = new();
 
-    public void Add(Room room)
+    public Task AddAsync(Room room, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+
         lock (_lock)
         {
             _rooms.Add(room);
         }
+
+        return Task.CompletedTask;
     }
 
-    public Room? Get(Guid id)
+    public Task<Room?> GetByIdAsync(Guid id, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+
         lock (_lock)
         {
-            return _rooms.FirstOrDefault(r => r.Id == id);
+            return Task.FromResult(_rooms.FirstOrDefault(r => r.Id == id));
         }
     }
 }

@@ -1,4 +1,5 @@
-using RoomHub.Api.Services;
+using RoomHub.Api.Common.Cqrs;
+using RoomHub.Api.Common.Http;
 
 namespace RoomHub.Api.Features.Rooms.CreateRoom;
 
@@ -9,11 +10,15 @@ public static class CreateRoomEndpoint
         group.MapPost("/", Handle);
     }
 
-    private static IResult Handle(Request request, RoomService service)
+    private static async Task<IResult> Handle(
+        Request request,
+        ICommandHandler<CreateRoomCommand, Response> handler,
+        CancellationToken ct)
     {
-        var room = service.Create(request.Name, request.Capacity);
-        return Results.Created(
-            $"/api/rooms/{room.Id}",
-            new Response(room.Id, room.Name, room.Capacity));
+        var result = await handler.Handle(new CreateRoomCommand(request.Name, request.Capacity), ct);
+
+        return result.Match(
+            response => Results.Created($"/api/rooms/{response.Id}", response),
+            error => error.ToProblem());
     }
 }
